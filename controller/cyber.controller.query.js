@@ -298,7 +298,7 @@ exports.queryForProductBadgeAndCategory = async (req, res) => {
 };
 
 // Query for search results
-exports.searchProductsByTitleAndDescriptionAndCatagoriesAndBadge = async (req, res) => {
+exports.searchProductsByTitleAndDescription = async (req, res) => {
   const { query } = req.query;
 
   try {
@@ -306,7 +306,7 @@ exports.searchProductsByTitleAndDescriptionAndCatagoriesAndBadge = async (req, r
     if (!query || query.trim() === "") {
       return res.status(400).json({
         success: false,
-        message: "Query parameter is required.",
+        message: "Query parameter is required and cannot be empty.",
       });
     }
 
@@ -315,25 +315,40 @@ exports.searchProductsByTitleAndDescriptionAndCatagoriesAndBadge = async (req, r
       {
         $or: [
           { product_title: { $regex: query, $options: "i" } },
-          { product_description: { $regex: query, $options: "i" } },
-          { product_categories: { $regex: query, $options: "i" } },
-          { product_badge: { $regex: query, $options: "i" } },
+          { product_description: { $regex: query, $options: "i" } }
         ],
       },
-      "product_title product_description product_basePrice product_categories product_badge"
-    );
+      "product_title product_description product_badge variants"
+    ).populate({
+      path: "variants",
+      select: "product_images",
+    });
 
-    if (!products.length) {
+    if (!products || products.length === 0) {
       return res.status(404).json({
         success: false,
         message: `No products found matching the query: "${query}"`,
       });
     }
 
+    // Format the product response
+    const formattedProducts = products.map((product) => {
+      // Get the first variant if it exists
+      const firstVariant = product.variants && product.variants[0];
+    
+      return {
+        productId: product._id,
+        product_title: product.product_title,
+        product_description: product.product_description,
+        product_badge: product.product_badge,
+        product_image: firstVariant ? firstVariant.product_images[0] : null,
+      };
+    });
+
     res.status(200).json({
       success: true,
       message: "Products retrieved successfully.",
-      products: products,
+      products: formattedProducts,
     });
   } catch (error) {
     console.error("Error searching products by title and description:", error);

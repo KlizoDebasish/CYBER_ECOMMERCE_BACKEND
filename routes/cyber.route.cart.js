@@ -4,12 +4,12 @@ const { addToCart, cartDetails, removeFromCart, clearCart, updateCartItemQuantit
 const { isAuthenticated } = require("../middleware/isAuthenticated.js");
 const isUser = require('../middleware/isUser.js')
 
-// isUser
-router.post("/addToCart", isAuthenticated, addToCart);
-router.get("/cartDetails", isAuthenticated, cartDetails); //for all carts 
-router.delete("/removeFromCart/:productId", isAuthenticated, removeFromCart);
-router.delete("/clearCart", isAuthenticated, clearCart);
-router.put("/updateCartItemQuantity/:cartItemId", isAuthenticated, updateCartItemQuantity);
+
+router.post("/addToCart", isAuthenticated, isUser, addToCart);
+router.get("/cartDetails", isAuthenticated, isUser, cartDetails);
+router.delete("/removeFromCart/:productId", isAuthenticated, isUser, removeFromCart);
+router.delete("/clearCart", isAuthenticated, isUser, clearCart);
+router.put("/updateCartItemQuantity/:cartItemId", isAuthenticated, isUser, updateCartItemQuantity);
 
 module.exports = router;
 

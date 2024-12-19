@@ -5,10 +5,9 @@ const { isAuthenticated } = require('../middleware/isAuthenticated');
 // const isUser = require('../middleware/isUser.js')
 
 // Add product to wishlist
-// isUser
-router.post('/addToWishlist', isAuthenticated, addToWishlist);
-router.get('/getWishlist', isAuthenticated, getWishlist);
-router.delete('/removeFromWishlist/:productId', isAuthenticated, removeFromWishlist);
+router.post('/addToWishlist', isAuthenticated, isUser, addToWishlist);
+router.get('/getWishlist', isAuthenticated, isUser, getWishlist);
+router.delete('/removeFromWishlist/:productId', isAuthenticated, isUser, removeFromWishlist);
 
 module.exports = router;
 

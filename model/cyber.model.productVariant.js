@@ -1,9 +1,9 @@
-const { mongoose } = require("mongoose");
+const  mongoose = require("mongoose");
 
 const productVariantSchema = new mongoose.Schema({
   productId: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: "Product",
+    ref: "Product"
   },
   product_brand: {
     type: String,

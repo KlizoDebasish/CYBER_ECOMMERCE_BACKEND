@@ -54,6 +54,10 @@ const userSchema = new mongoose.Schema(
         }
       },
     ],
+    orderCount: {
+      type: Number,
+      default: 0,
+    },
   },
   {
     timestamps: true,

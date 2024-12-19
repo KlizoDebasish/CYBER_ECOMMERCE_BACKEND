@@ -116,9 +116,9 @@ exports.getWishlist = async (req, res) => {
     });
 
     if (!wishlist) {
-      return res.status(404).json({
+      return res.status(200).json({
+        success: true,
         message: 'Wishlist not found',
-        success: false,
       });
     }
 
@@ -149,22 +149,22 @@ exports.getWishlist = async (req, res) => {
       });
 
     if (formattedWishlist.length === 0) {
-      return res.status(404).json({
-        // message: 'Wishlist is empty or contains invalid items',
-        success: false,
+      return res.status(200).json({
+        success: true,
+        message: 'Wishlist is empty',
       });
     }
 
     res.status(200).json({
-      // message: 'Wishlist fetched successfully',
       success: true,
+      // message: 'Wishlist fetched successfully',
       wishlist: formattedWishlist,
     });
   } catch (error) {
     console.error('Error fetching wishlist:', error);
     res.status(500).json({
-      message: 'Internal server error',
       success: false,
+      message: 'Internal server error',
       error: error.message,
     });
   }

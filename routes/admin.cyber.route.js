@@ -7,7 +7,7 @@ const { getAllfeedbacks } = require('../controller/cyber.controller.feedback');
 
 
 // users
-router.get('/allusers', isAuthenticated, allUsers); //isAdmin
+router.get('/allusers', isAuthenticated, isAdmin, allUsers);
 router.delete('/delete/user/:userId', isAuthenticated, isAdmin, deleteUser);
 
 // feedbacks

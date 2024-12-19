@@ -1,5 +1,7 @@
 const orderModel = require("../model/cyber.model.order");
 const cartModel = require("../model/cyber.model.cart");
+const productVariantModel = require("../model/cyber.model.productVariant");
+const userModel = require("../model/cyber.model.user");
 require("dotenv").config();
 const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 
@@ -9,7 +11,7 @@ exports.placeOrderStripe = async (req, res) => {
     const userId = req.id;
     // console.log("req.body", req.body)
 
-    const { items, amount, address } = req.body;
+    const { items, amount, address, deliveryDate, shippingMethod } = req.body;
 
     if (!items || items.length === 0) {
       return res.status(400).json({ success: false, message: "Items are required." });
@@ -21,11 +23,21 @@ exports.placeOrderStripe = async (req, res) => {
       return res.status(400).json({ success: false, message: "Address is required." });
     }
 
+    // Fetch user details from database
+    const user = await userModel.findById(userId);
+    if (!user) {
+      return res.status(404).json({ success: false, message: "User not found." });
+    }
+
+    const { email, fullname } = user;
+
     const newOrder = new orderModel({
       userId,
       items,
       amount,
       address,
+      deliveryDate,
+      shippingMethod,
       paymentStatus: "Failed",
     });
     await newOrder.save();
@@ -49,6 +61,12 @@ exports.placeOrderStripe = async (req, res) => {
       cancel_url: `${process.env.FRONTEND_ORIGIN_URI}/order/verify?success=false&orderId=${newOrder._id}`,
       line_items,
       mode: "payment",
+      customer_email: email,
+      metadata: {
+        orderId: newOrder._id.toString(),
+        userId: userId.toString(),
+        customerName: fullname
+      },
     });
 
     res.status(200).json({ success: true, session_url: session.url });
@@ -75,6 +93,38 @@ exports.verifyStripeOrder = async (req, res) => {
         return res.status(404).json({ success: false, message: "Order not found." });
       }
 
+      // Update the order count for the user
+      const user = await userModel.findById(updatedOrder.userId);
+      if (user) {
+      user.orderCount += 1;  // Increment the order count
+      await user.save();  // Save the updated user information
+      }
+            
+      // Update stock for each product in the order
+      const updateStock = updatedOrder.items.map(async (item) => {
+        const { productId, quantity, product_title } = item;
+
+        // Fetch the ProductVariant based on productId
+        const variant = await productVariantModel.findOne({ productId });
+
+        if (variant) {
+          const newStock = variant.product_stock - quantity;
+          if (newStock < 0) {
+            throw new Error(
+              `Insufficient stock for product: ${product_title}. Available stock: ${variant.product_stock}, requested quantity: ${quantity}.`
+            );
+          }
+
+          // Update the stock in the database
+          await productVariantModel.findByIdAndUpdate(variant._id, { product_stock: newStock });
+        } else {
+          throw new Error(`No variant information found for item: ${product_title}`);
+        }
+      });
+
+      // Wait for all stock updates to complete
+      await Promise.all(updateStock);
+
       // Clear the user's cart
       await cartModel.findOneAndUpdate(
         { userId: updatedOrder.userId },
@@ -82,7 +132,7 @@ exports.verifyStripeOrder = async (req, res) => {
         { new: true }
       );
 
-      res.status(200).json({ success: true, message: "Payment verified, order processed." });
+      res.status(200).json({ success: true, message: "Payment verified, order processed" });
     } else {
       // Handle failed payment
       await orderModel.findByIdAndUpdate(orderId, { paymentStatus: "Failed" });
@@ -90,7 +140,7 @@ exports.verifyStripeOrder = async (req, res) => {
     }
   } catch (error) {
     console.error("Error verifying order:", error);
-    res.status(500).json({ success: false, message: "Error verifying payment." });
+    res.status(500).json({ success: false, message: `Error verifying payment: ${error.message}` });
   }
 };
 
@@ -98,7 +148,18 @@ exports.verifyStripeOrder = async (req, res) => {
 exports.placeOrderCod = async (req, res) => {
   try {
     const userId = req.id;
-    const { items, amount, address } = req.body;
+    const { items, amount, address, deliveryDate, shippingMethod } = req.body;
+
+    // Validation for required fields
+    if (!items || items.length === 0) {
+      return res.status(400).json({ success: false, message: "Items are required." });
+    }
+    if (!amount || amount <= 0) {
+      return res.status(400).json({ success: false, message: "Invalid amount." });
+    }
+    if (!address) {
+      return res.status(400).json({ success: false, message: "Address is required." });
+    }
 
     // Create a new COD order
     const newOrder = new orderModel({
@@ -106,9 +167,43 @@ exports.placeOrderCod = async (req, res) => {
       items,
       amount,
       address,
-      payment: true,
+      deliveryDate,
+      shippingMethod,
+      payment: true
     });
+
     await newOrder.save();
+
+    // Update stock for each product in the order
+    const updateStock = items.map(async (item) => {
+      const { productId, quantity } = item;
+
+      const variant = await productVariantModel.findOne({ productId });
+
+      if (variant) {
+        const newStock = variant.product_stock - quantity;
+        if (newStock < 0) {
+          throw new Error(
+            `Insufficient stock for product: ${product_title}. Available stock: ${variant.product_stock}, requested quantity: ${quantity}.`
+          );
+        }
+
+        // Update the stock in the database
+        await productVariantModel.findByIdAndUpdate(variant._id, { product_stock: newStock });
+      } else {
+        throw new Error("No variant information found for product");
+      }
+    });
+
+    // Wait for all stock updates to complete
+    await Promise.all(updateStock);
+
+    // Update the user's order count
+    const user = await userModel.findById(userId);
+    if (user) {
+      user.orderCount += 1;
+      await user.save();
+    }
 
     // Clear user cart
     await cartModel.findOneAndUpdate(
@@ -117,14 +212,22 @@ exports.placeOrderCod = async (req, res) => {
       { new: true }
     );
 
-    res
-      .status(200)
-      .json({ success: true, message: "Order Placed" });
+    res.status(200).json({
+      success: true,
+      message: "Order Placed Successfully",
+    });
   } catch (error) {
     console.error("Error placing COD order:", error);
-    res
-      .status(500)
-      .json({ success: false, message: "Error placing COD order" });
+
+    // Handling specific error cases
+    if (error.message.includes("Insufficient stock")) {
+      res.status(400).json({ success: false, message: error.message });
+    } else {
+      res.status(500).json({
+        success: false,
+        message: `Error placing COD order: ${error.message}`,
+      });
+    }
   }
 };
 

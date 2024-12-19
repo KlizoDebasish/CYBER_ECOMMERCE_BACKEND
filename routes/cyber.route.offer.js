@@ -5,11 +5,11 @@ const { isAuthenticated } = require('../middleware/isAuthenticated');
 const { createOffer, getAllOffers, updateOffer, removeOffer } = require('../controller/cyber.controller.offer');
 const { singleUpload } = require('../middleware/multer.config');
 
-// isAuthenticated, isAdmin, 
-router.post("/createOffer", singleUpload, createOffer);
-router.put("/updateOffer/:offerId", singleUpload, updateOffer);
+
+router.post("/createOffer", isAuthenticated, isAdmin, singleUpload, createOffer);
+router.put("/updateOffer/:offerId", isAuthenticated, isAdmin, singleUpload, updateOffer);
 router.get("/getOffer", getAllOffers);
-router.delete("/removeOffer/:offerId", removeOffer);
+router.delete("/removeOffer/:offerId", isAuthenticated, isAdmin, removeOffer);
 
 module.exports = router;
 

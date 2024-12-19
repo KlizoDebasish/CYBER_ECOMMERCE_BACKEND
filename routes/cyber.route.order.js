@@ -6,15 +6,15 @@ const { isAuthenticated } = require('../middleware/isAuthenticated');
 const { placeOrderStripe, placeOrderCod, userOrders, verifyStripeOrder, orderLists, updateOrderDetails, filterOrderStatus } = require('../controller/cyber.controller.order')
 
 
-router.post("/placeOrderStripe", isAuthenticated, placeOrderStripe);
-router.post("/verifyStripeOrder", isAuthenticated, verifyStripeOrder);
-router.post("/placeOrderCod", isAuthenticated, placeOrderCod);
-router.get("/userOrders", isAuthenticated, userOrders);
+router.post("/placeOrderStripe", isAuthenticated, isUser, placeOrderStripe);
+router.post("/verifyStripeOrder", isAuthenticated, isUser, verifyStripeOrder);
+router.post("/placeOrderCod", isAuthenticated, isUser, placeOrderCod);
+router.get("/userOrders", isAuthenticated, isUser, userOrders);
 
-router.get("/orderLists", isAuthenticated, orderLists); // isAdmin
-router.put("/updateOrderDetails", isAuthenticated, updateOrderDetails); // isAdmin
+router.get("/orderLists", isAuthenticated,  isAdmin, orderLists);
+router.put("/updateOrderDetails", isAuthenticated,  isAdmin, updateOrderDetails);
 
-router.get("/filterOrderStatus",isAuthenticated, filterOrderStatus); // isAdmin
+router.get("/filterOrderStatus",isAuthenticated, isAdmin, filterOrderStatus);
 
 module.exports = router;
 
