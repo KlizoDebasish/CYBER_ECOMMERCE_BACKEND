@@ -176,7 +176,7 @@ exports.placeOrderCod = async (req, res) => {
 
     // Update stock for each product in the order
     const updateStock = items.map(async (item) => {
-      const { productId, quantity } = item;
+      const { productId, quantity, product_title } = item;
 
       const variant = await productVariantModel.findOne({ productId });
 
