@@ -19,8 +19,9 @@ const PORT = process.env.PORT || 2008;
 
 // Enable CORS for all domains
 const allowedOrigins = [
-  process.env.FRONTEND_ORIGIN_URI_1,
-  process.env.FRONTEND_ORIGIN_URI_2,
+  process.env.FRONTEND_ORIGIN_URI,   // http://192.168.1.32:5173
+  process.env.FRONTEND_ORIGIN_URI_1, // https://ecommerce-app-klizos.vercel.app
+  process.env.FRONTEND_ORIGIN_URI_2, // https://cyber-ecommerce-app.vercel.app
 ];
 
 const corsOptions = {
