@@ -10,6 +10,25 @@ exports.addToCart = async (req, res) => {
       return res.status(400).json({ success: false, message: "Invalid input data." });
     }
 
+
+     const product = await productModel.findById(productId).populate("variants");
+
+     if (!product) {
+       return res.status(404).json({ success: false, message: "Product not found." });
+     }
+
+        // Check if the product is out of stock
+        const variant = product.variants[0];
+
+        if (!variant || variant.product_stock <= 0) {
+          return res.status(200).json({ success: false, message: "Product is out of stock." });
+        }
+    
+        // If stock is less than the requested quantity, prevent adding to cart
+        if (variant.product_stock < quantity) {
+          return res.status(400).json({ success: false, message: "Not enough stock available." });
+        }
+
     let cart = await cartModel.findOne({ userId });
 
     if (!cart) {
