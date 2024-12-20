@@ -18,21 +18,9 @@ const Cyber = express();
 const PORT = process.env.PORT || 2008;
 
 // Enable CORS for all domains
-const allowedOrigins = [
-  process.env.FRONTEND_ORIGIN_URI,   // http://192.168.1.32:5173
-  process.env.FRONTEND_ORIGIN_URI_1, // https://ecommerce-app-klizos.vercel.app
-  process.env.FRONTEND_ORIGIN_URI_2, // https://cyber-ecommerce-app.vercel.app
-];
-
 const corsOptions = {
-  origin: (origin, callback) => {
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
-  credentials: true,
+  origin: process.env.FRONTEND_ORIGIN_URI,
+  credentials: true
 };
 
 Cyber.use(cors(corsOptions));
