@@ -18,9 +18,20 @@ const Cyber = express();
 const PORT = process.env.PORT || 2008;
 
 // Enable CORS for all domains
+const allowedOrigins = [
+  process.env.FRONTEND_ORIGIN_URI_1,
+  process.env.FRONTEND_ORIGIN_URI_2,
+];
+
 const corsOptions = {
-  origin: process.env.FRONTEND_ORIGIN_URI,
-  credentials: true
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
 };
 
 Cyber.use(cors(corsOptions));
