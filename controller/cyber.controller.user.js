@@ -96,7 +96,7 @@ exports.signup = async (req, res) => {
         return res.status(400).json({
           success: false,
           message:
-            "Not a verified number. Please verify!",
+            "Not a verified number (Twilio). Please verify!",
         });
       }
 
