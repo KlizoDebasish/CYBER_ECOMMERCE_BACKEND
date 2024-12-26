@@ -1,5 +1,5 @@
 const express = require("express");
-const { queryForProductColorAndStorage, queryForProductCatagories, queryForSearchingProduct, queryForProductBadge, searchProductsByTitleAndDescription, queryForProductBadgeAndCategory, queryForPaginnateAddress } = require("../controller/cyber.controller.query");
+const { queryForProductColorAndStorage, queryForProductCatagories, queryForFilteringProduct, queryForProductBadge, searchProductsByTitleAndDescription, queryForProductBadgeAndCategory, queryForPaginnateAddress } = require("../controller/cyber.controller.query");
 const { getProducts, getSpecificProductWithVariants } = require("../controller/cyber.controller.product");
 const { isAuthenticated } = require("../middleware/isAuthenticated");
 const isUser = require("../middleware/isUser");
@@ -9,9 +9,9 @@ const router = express.Router();
 
 // query routes
 router.get("/queryForProductColorAndStorage/:productId/variants",  queryForProductColorAndStorage);
-router.get("/queryForSearchingProduct",  queryForSearchingProduct);
-router.get("/queryForProductCatagories",  queryForProductCatagories);
-router.get("/queryForProductBadge",  queryForProductBadge);
+router.get("/queryForFilteringProduct",  queryForFilteringProduct);
+// router.get("/queryForProductCatagories",  queryForProductCatagories);
+// router.get("/queryForProductBadge",  queryForProductBadge);
 router.get("/queryForProductBadgeAndCategory",  queryForProductBadgeAndCategory);
 router.get("/searchProductsByTitleAndDescription/search",  searchProductsByTitleAndDescription);
 router.get("/queryForPaginnateAddress", isAuthenticated, isUser, queryForPaginnateAddress);

@@ -68,32 +68,51 @@ exports.signup = async (req, res) => {
       });
     }
 
-    // Generate OTP
-    const otp = generateOTP();
+    try {
+        // Generate OTP
+      const otp = generateOTP();
 
-    // Save OTP temporarily in the database
-    const otpData = new otpModel({
-      phone: phone.trim(),
-      email: email ? email.trim() : "Cyber@example.com",
-      otp,
-      fullname: fullname ? fullname.trim() : "Cyber user",
-      timestamp: Date.now(),
-    });
+      // Save OTP temporarily in the database
+      const otpData = new otpModel({
+        phone: phone.trim(),
+        email: email ? email.trim() : "Cyber@example.com",
+        otp,
+        fullname: fullname ? fullname.trim() : "Cyber user",
+        timestamp: Date.now(),
+      });
 
-    await otpData.save();
+      await otpData.save();
 
-    // Send OTP via Twilio
-    await sendOTP(fullname, phone.trim(), otp);
+      // Send OTP via Twilio
+      await sendOTP(fullname, phone.trim(), otp);
 
-    return res.status(200).json({
-      success: true,
-      message: "OTP sent! Please verify to proceed.",
-    });
+      return res.status(200).json({
+        success: true,
+        message: "OTP sent! Please verify to proceed.",
+      });
+    } catch (error) {
+      // Handle errors from Twilio
+      if (error.message.includes("unverified")) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Not a verified number. Please verify!",
+        });
+      }
+
+      // General error handling
+      console.error("Error sending OTP:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Internal server or Twilio error'. Please try again later.",
+      });
+    }
+    
   } catch (error) {
     console.error("Error during user registration:", error);
     return res.status(500).json({
       success: false,
-      message: "Internal server error. Please try again later.",
+      message: "Internal server or Twilio error'. Please try again later.",
     });
   }
 };
@@ -137,7 +156,7 @@ exports.verifyOtpforRegister = async (req, res) => {
       });
     }
 
-    // Check if OTP matches
+    // Check if OTP not matched
     if (otpData.otp !== otp) {
       return res.status(400).json({
         success: false,
@@ -153,9 +172,6 @@ exports.verifyOtpforRegister = async (req, res) => {
       isLoggedIn: true,
     });
 
-    newUser.isLoggedIn = true;
-    await newUser.save();
-
     await newUser.save();
 
     const token = jwt.sign(
@@ -164,12 +180,23 @@ exports.verifyOtpforRegister = async (req, res) => {
       { expiresIn: "7d" }
     );
 
+    // // Generate Refresh Token
+    // const refreshToken = jwt.sign(
+    //   { id: newUser._id, role: newUser.role },
+    //   process.env.JWT_REFRESH_SECRET,
+    //   { expiresIn: "30d" }
+    // );
+
+     // Save refresh token in the database (optional, but recommended for secure management)
+    //  newUser.refreshToken = refreshToken;
+    //  await newUser.save();
+
     return res
       .status(201)
       .cookie("authToken", token, {
-        // httpOnly: false,
-        // secure: false,
-        maxAge: 7 * 24 * 60 * 60 * 1000, // 1 week
+        httpOnly: true,
+        secure: true,
+        maxAge: 7 * 24 * 60 * 60 * 1000,
       })
       .json({
         success: true,
@@ -181,7 +208,7 @@ exports.verifyOtpforRegister = async (req, res) => {
     console.error("Error during OTP verification:", error);
     return res.status(500).json({
       success: false,
-      message: "Internal server error. Or not a Verfied number",
+      message: "Internal server or Twilio error, please try again later",
     });
   }
 };
@@ -235,7 +262,7 @@ exports.login = async (req, res) => {
         return res.status(400).json({
           success: false,
           message:
-            "Not a verified number. Please verify it from Debasish 🙂",
+            "Not a verified number. Please verify!",
         });
       }
 
@@ -243,7 +270,7 @@ exports.login = async (req, res) => {
       console.error("Error sending OTP:", error);
       return res.status(500).json({
         success: false,
-        message: "Internal server error. Please try again later.",
+        message: "Internal server or Twilio error'. Please try again later.",
       });
     }
   } catch (error) {
@@ -338,7 +365,7 @@ exports.verifyOtpforlogin = async (req, res) => {
     console.error("Error during OTP verification:", error);
     return res.status(500).json({
       success: false,
-      message: "Internal server error Or not a Verfied number",
+      message: "Internal server error or not a Verfied number",
     });
   }
 };
@@ -535,18 +562,18 @@ exports.createAddress = async (req, res) => {
     }
 
     // Check for duplicate addresses
-    // const isDuplicateStreet = user.address.some((address) => {
-    //   return (
-    //     address.street.toLowerCase() === newAddress.street.toLowerCase()
-    //   );
-    // });
+    const isDuplicateStreet = user.address.some((address) => {
+      return (
+        address.street.toLowerCase() === newAddress.street.toLowerCase()
+      );
+    });
 
-    // if (isDuplicateStreet) {
-    //   return res.status(400).json({
-    //     success: false,
-    //     message: "Street already exists",
-    //   });
-    // }
+    if (isDuplicateStreet) {
+      return res.status(400).json({
+        success: false,
+        message: "Street already exists",
+      });
+    }
 
     // const isDuplicateCity = user.address.some((address) => {
     //   return (
@@ -561,18 +588,18 @@ exports.createAddress = async (req, res) => {
     //   });
     // }
 
-    const isDuplicateLandmark = user.address.some((address) => {
-      return (
-        address.landMark.toLowerCase() === newAddress.landMark.toLowerCase()
-      );
-    });
+    // const isDuplicateLandmark = user.address.some((address) => {
+    //   return (
+    //     address.landMark.toLowerCase() === newAddress.landMark.toLowerCase()
+    //   );
+    // });
 
-    if (isDuplicateLandmark) {
-      return res.status(400).json({
-        success: false,
-        message: "LandMark already exists",
-      });
-    }
+    // if (isDuplicateLandmark) {
+    //   return res.status(400).json({
+    //     success: false,
+    //     message: "LandMark already exists",
+    //   });
+    // }
 
     user.address.unshift(newAddress);
     await user.save();

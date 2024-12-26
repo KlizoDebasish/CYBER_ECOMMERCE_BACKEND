@@ -50,52 +50,76 @@ exports.queryForProductColorAndStorage = async (req, res) => {
 };
 
 // Query for search brand, color, batteryCapacity and storage
-exports.queryForSearchingProduct = async (req, res) => {
-  const { brand, color, batteryCapacity, storage } = req.query;
+exports.queryForFilteringProduct = async (req, res) => {
+  const { brand, color, battery_capacity, storage } = req.query;
 
   try {
     let filter = {};
 
+    // Parse and build filter for each field
     if (brand) {
-      filter.product_brand = { $regex: brand, $options: "i" };
+      filter.product_brand = { $in: brand.split(",").map((b) => new RegExp(b, "i")) };
     }
 
     if (color) {
-      filter.product_color = { $regex: color, $options: "i" };
+      filter.product_color = { $in: color.split(",").map((c) => new RegExp(c, "i")) };
     }
 
-    if (batteryCapacity) {
+    if (battery_capacity) {
       filter.product_battery_capacity = {
-        $regex: batteryCapacity,
-        $options: "i",
+        $in: battery_capacity.split(",").map((bc) => new RegExp(bc, "i")),
       };
     }
 
     if (storage) {
-      filter.product_storage = { $regex: storage, $options: "i" };
+      filter.product_storage = { $in: storage.split(",").map((s) => new RegExp(s, "i")) };
     }
 
     const variants = await productVariantModel
-      .find(filter)
-      .populate(
-        "productId",
-        "product_title product_description product_basePrice product_categories product_badge"
-      );
+    .find(filter)
+    .populate({
+      path: "productId",
+      select: "product_title product_description product_basePrice product_categories product_badge"
+    })
+    .sort({ product_title: 1 });
 
-    if (!variants.length) {
-      return res.status(404).json({
-        success: false,
-        message: "No variants found matching the criteria.",
-      });
-    }
-
-    res.status(200).json({
-      success: true,
-      message: "Variants retrieved successfully.",
-      data: variants,
+  if (!variants.length) {
+    return res.status(200).json({
+      success: false,
+      message: "No variants found matching the criteria.",
     });
+  }
+
+  // Format the products
+  const filterProducts = variants.map((variant) => {
+    const firstImage = variant.product_images?.[0];
+  
+    return {
+      _id: variant.productId._id,
+      product_title: variant.productId.product_title,
+      product_description: variant.productId.product_description,
+      product_basePrice: variant.productId.product_basePrice,
+      product_categories: variant.productId.product_categories,
+      product_badge: variant.productId.product_badge,
+      variants: [{
+        product_brand: variant.product_brand,
+        product_color: variant.product_color,
+        product_storage: variant.product_storage,
+        product_batteryCapacity: variant.product_battery_capacity,
+        product_additionalPrice: variant.product_additional_price,
+        product_stock: variant.product_stock,
+        product_images: variant.product_images || [firstImage],
+      }],
+    };
+  });  
+
+  res.status(200).json({
+    success: true,
+    message: "Variants retrieved successfully.",
+    filterProducts,
+  });
   } catch (error) {
-    console.error("Error fetching product variants:", error);
+    console.error("Error fetching product variants:", error.message);
     res.status(500).json({
       success: false,
       message: "Internal server error",
@@ -104,127 +128,127 @@ exports.queryForSearchingProduct = async (req, res) => {
 };
 
 // Query for get Category details
-exports.queryForProductCatagories = async (req, res) => {
-  const category = req.query.category;
-  // console.log(category);
+// exports.queryForProductCatagories = async (req, res) => {
+//   const category = req.query.category;
+//   // console.log(category);
 
-  try {
-    if (!category) {
-      return res.status(400).json({
-        success: false,
-        message: "Category parameter is required.",
-      });
-    }
+//   try {
+//     if (!category) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Category parameter is required.",
+//       });
+//     }
 
-    const products = await productModel
-      .find(
-        { product_categories: { $regex: category, $options: "i" } },
-        "product_title product_basePrice product_badge product_categories variants"
-      )
-      .populate({
-        path: "variants",
-        select: "product_images",
-      })
-      .sort({ product_title: 1 });
+//     const products = await productModel
+//       .find(
+//         { product_categories: { $regex: category, $options: "i" } },
+//         "product_title product_basePrice product_badge product_categories variants"
+//       )
+//       .populate({
+//         path: "variants",
+//         select: "product_images",
+//       })
+//       .sort({ product_title: 1 });
 
-    if (!products.length) {
-      return res.status(404).json({
-        success: false,
-        message: `No products found for category: ${category}`,
-      });
-    }
+//     if (!products.length) {
+//       return res.status(404).json({
+//         success: false,
+//         message: `No products found for category: ${category}`,
+//       });
+//     }
 
-    const formattedProducts = products.map((product) => {
-      const firstImage =
-        product.variants?.length > 0
-          ? product.variants[0]?.product_images[0] ||
-            product.variants[1]?.product_images[0]
-          : "https://newhorizonindia.edu/nhengineering/innovation/wp-content/uploads/2020/01/default-placeholder.png";
+//     const formattedProducts = products.map((product) => {
+//       const firstImage =
+//         product.variants?.length > 0
+//           ? product.variants[0]?.product_images[0] ||
+//             product.variants[1]?.product_images[0]
+//           : "https://newhorizonindia.edu/nhengineering/innovation/wp-content/uploads/2020/01/default-placeholder.png";
 
-      return {
-        _id: product._id,
-        product_title: product.product_title,
-        product_basePrice: product.product_basePrice,
-        product_badge: product.product_badge,
-        product_categories: product.product_categories,
-        first_image: firstImage,
-      };
-    });
+//       return {
+//         _id: product._id,
+//         product_title: product.product_title,
+//         product_basePrice: product.product_basePrice,
+//         product_badge: product.product_badge,
+//         product_categories: product.product_categories,
+//         first_image: firstImage,
+//       };
+//     });
 
-    res.status(200).json({
-      success: true,
-      message: "Products retrieved successfully.",
-      products: formattedProducts,
-    });
-  } catch (error) {
-    console.error("Error fetching products by category:", error);
-    res.status(500).json({
-      success: false,
-      message: "Internal server error",
-    });
-  }
-};
+//     res.status(200).json({
+//       success: true,
+//       message: "Products retrieved successfully.",
+//       products: formattedProducts,
+//     });
+//   } catch (error) {
+//     console.error("Error fetching products by category:", error);
+//     res.status(500).json({
+//       success: false,
+//       message: "Internal server error",
+//     });
+//   }
+// };
 
 // Query for get Badge details
-exports.queryForProductBadge = async (req, res) => {
-  const { badge } = req.query;
+// exports.queryForProductBadge = async (req, res) => {
+//   const { badge } = req.query;
 
-  try {
-    if (!badge || badge.trim() === "") {
-      return res.status(400).json({
-        success: false,
-        message: "Badge parameter is required.",
-      });
-    }
+//   try {
+//     if (!badge || badge.trim() === "") {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Badge parameter is required.",
+//       });
+//     }
 
-    const products = await productModel
-      .find(
-        { product_badge: { $regex: badge, $options: "i" } },
-        "product_title product_basePrice product_badge variants"
-      )
-      .populate({
-        path: "variants",
-        select: "product_images",
-      })
-      .sort({ product_title: 1 });
+//     const products = await productModel
+//       .find(
+//         { product_badge: { $regex: badge, $options: "i" } },
+//         "product_title product_basePrice product_badge variants"
+//       )
+//       .populate({
+//         path: "variants",
+//         select: "product_images",
+//       })
+//       .sort({ product_title: 1 });
 
-    if (!products.length) {
-      return res.status(404).json({
-        success: false,
-        message: `No products found for Badge: ${badge}`,
-      });
-    }
+//     if (!products.length) {
+//       return res.status(404).json({
+//         success: false,
+//         message: `No products found for Badge: ${badge}`,
+//       });
+//     }
 
-    const formattedProducts = products.map((product) => {
-      const firstImage =
-        product.variants?.length > 0
-          ? product.variants[0]?.product_images[0] ||
-            product.variants[1]?.product_images[0]
-          : "https://newhorizonindia.edu/nhengineering/innovation/wp-content/uploads/2020/01/default-placeholder.png";
+//     const formattedProducts = products.map((product) => {
+//       const firstImage =
+//         product.variants?.length > 0
+//           ? product.variants[0]?.product_images[0] ||
+//             product.variants[1]?.product_images[0]
+//           : "https://newhorizonindia.edu/nhengineering/innovation/wp-content/uploads/2020/01/default-placeholder.png";
 
-      return {
-        _id: product._id,
-        product_title: product.product_title,
-        product_basePrice: product.product_basePrice,
-        product_badge: product.product_badge,
-        first_image: firstImage,
-      };
-    });
+//       return {
+//         _id: product._id,
+//         product_title: product.product_title,
+//         product_basePrice: product.product_basePrice,
+//         product_badge: product.product_badge,
+//         first_image: firstImage,
+//       };
+//     });
 
-    res.status(200).json({
-      success: true,
-      message: "Products retrieved successfully.",
-      products: formattedProducts,
-    });
-  } catch (error) {
-    console.error("Error fetching products by badge:", error);
-    res.status(500).json({
-      success: false,
-      message: "Internal server error",
-      error: error.message,
-    });
-  }
-};
+//     res.status(200).json({
+//       success: true,
+//       message: "Products retrieved successfully.",
+//       products: formattedProducts,
+//     });
+//   } catch (error) {
+//     console.error("Error fetching products by badge:", error);
+//     res.status(500).json({
+//       success: false,
+//       message: "Internal server error",
+//       error: error.message,
+//     });
+//   }
+// };
 
 exports.queryForProductBadgeAndCategory = async (req, res) => {
   const { badge, category } = req.query;
@@ -258,8 +282,8 @@ exports.queryForProductBadgeAndCategory = async (req, res) => {
       .sort({ product_title: 1 });
 
     if (!products.length) {
-      return res.status(404).json({
-        success: false,
+      return res.status(200).json({
+        success: true,
         message: `No products found.`,
       });
     }
@@ -310,13 +334,18 @@ exports.searchProductsByTitleAndDescription = async (req, res) => {
       });
     }
 
-    // Fetch products by title or description with case-insensitive partial match
+    // Split query into individual words (tokens) for partial matching
+    const tokens = query.trim().split(/\s+/);
+
+    // Build regex-based query for matching all tokens in title or description
+    const searchConditions = tokens.flatMap((token) => [
+      { product_title: { $regex: token, $options: "i" } },
+      { product_description: { $regex: token, $options: "i" } },
+    ]);
+
     const products = await productModel.find(
       {
-        $or: [
-          { product_title: { $regex: query, $options: "i" } },
-          { product_description: { $regex: query, $options: "i" } }
-        ],
+        $or: searchConditions,
       },
       "product_title product_description product_badge variants"
     ).populate({
@@ -325,7 +354,7 @@ exports.searchProductsByTitleAndDescription = async (req, res) => {
     });
 
     if (!products || products.length === 0) {
-      return res.status(404).json({
+      return res.status(200).json({
         success: false,
         message: `No products found matching the query: "${query}"`,
       });
@@ -334,14 +363,13 @@ exports.searchProductsByTitleAndDescription = async (req, res) => {
     // Format the product response
     const formattedProducts = products.map((product) => {
       // Get the first variant if it exists
-      const firstVariant = product.variants && product.variants[0];
-    
+      const firstVariant = product.variants?.[0];
       return {
         productId: product._id,
         product_title: product.product_title,
         product_description: product.product_description,
         product_badge: product.product_badge,
-        product_image: firstVariant ? firstVariant.product_images[0] : null,
+        product_image: firstVariant ? firstVariant.product_images?.[0] : null,
       };
     });
 

@@ -1049,7 +1049,8 @@ exports.getProducts = async (req, res) => {
       .sort({ createdAt: -1 });
 
     if (!products || products.length === 0) {
-      return res.status(404).json({
+      return res.status(200).json({
+        scuucess: false,
         message: "Hmmm... No products found?",
       });
     }

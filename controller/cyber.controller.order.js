@@ -9,10 +9,9 @@ const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 exports.placeOrderStripe = async (req, res) => {
   try {
     const userId = req.id;
-    // console.log("req.body", req.body)
-
     const { items, amount, address, deliveryDate, shippingMethod } = req.body;
 
+    // Validation for required fields
     if (!items || items.length === 0) {
       return res.status(400).json({ success: false, message: "Items are required." });
     }
@@ -31,6 +30,27 @@ exports.placeOrderStripe = async (req, res) => {
 
     const { email, fullname } = user;
 
+    // Verify stock for all items before proceeding
+    for (const item of items) {
+      const { productId, quantity, product_title } = item;
+
+      const variant = await productVariantModel.findOne({ productId });
+      if (!variant) {
+        return res.status(400).json({
+          success: false,
+          message: `Variant not found for product: ${product_title}`,
+        });
+      }
+
+      if (variant.product_stock < quantity) {
+        return res.status(400).json({
+          success: false,
+          message: `Insufficient stock for product: ${product_title}. Available stock: ${variant.product_stock}, requested quantity: ${quantity}.`,
+        });
+      }
+    }
+
+    // Create a new order with initial status
     const newOrder = new orderModel({
       userId,
       items,
@@ -38,11 +58,11 @@ exports.placeOrderStripe = async (req, res) => {
       address,
       deliveryDate,
       shippingMethod,
-      paymentStatus: "Failed",
+      paymentStatus: "Pending",
     });
     await newOrder.save();
 
-
+    // Prepare line items for Stripe checkout
     const line_items = items.map((item) => ({
       price_data: {
         currency: "inr",
@@ -50,14 +70,14 @@ exports.placeOrderStripe = async (req, res) => {
           name: item.product_title,
           images: [item.product_image],
         },
-        unit_amount: item.product_price * 100, // Convert to smallest currency unit (e.g., if the price is ₹1500, the unit_amount is 1500 × 100 = 150000 paise).
+        unit_amount: item.product_price * 100, // Convert to smallest currency unit
       },
       quantity: item.quantity,
     }));
 
     // Create Stripe session
     const session = await stripe.checkout.sessions.create({
-      success_url: `${process.env.FRONTEND_ORIGIN_URI}/order/verify?success=true&orderId=${newOrder._id}`, // http://192.168.1.44:5173/order/verify?success=true&orderId=67600db0926f1cb20bb0fbb4
+      success_url: `${process.env.FRONTEND_ORIGIN_URI}/order/verify?success=true&orderId=${newOrder._id}`,
       cancel_url: `${process.env.FRONTEND_ORIGIN_URI}/order/verify?success=false&orderId=${newOrder._id}`,
       line_items,
       mode: "payment",
@@ -65,7 +85,7 @@ exports.placeOrderStripe = async (req, res) => {
       metadata: {
         orderId: newOrder._id.toString(),
         userId: userId.toString(),
-        customerName: fullname
+        customerName: fullname,
       },
     });
 
@@ -81,44 +101,44 @@ exports.verifyStripeOrder = async (req, res) => {
   const { orderId, success } = req.body;
 
   try {
+    const order = await orderModel.findById(orderId);
+    if (!order) {
+      return res.status(404).json({ success: false, message: "Order not found." });
+    }
+
     if (success === "true") {
-      // Mark the order as paid
-      const updatedOrder = await orderModel.findByIdAndUpdate(
-        orderId,
-        { payment: true, paymentStatus: "Paid" },
-        { new: true }
-      );
-
-      if (!updatedOrder) {
-        return res.status(404).json({ success: false, message: "Order not found." });
-      }
-
-      // Update the order count for the user
-      const user = await userModel.findById(updatedOrder.userId);
-      if (user) {
-      user.orderCount += 1;  // Increment the order count
-      await user.save();  // Save the updated user information
-      }
-            
-      // Update stock for each product in the order
-      const updateStock = updatedOrder.items.map(async (item) => {
+      // Verify stock before finalizing order
+      for (const item of order.items) {
         const { productId, quantity, product_title } = item;
 
-        // Fetch the ProductVariant based on productId
         const variant = await productVariantModel.findOne({ productId });
+        if (!variant || variant.product_stock < quantity) {
+          throw new Error(
+            `Insufficient stock for product: ${product_title}. Available stock: ${variant?.product_stock || 0}, requested quantity: ${quantity}.`
+          );
+        }
+      }
 
+      // Mark the order as paid
+      order.paymentStatus = "Paid";
+      order.payment = true;
+      await order.save();
+
+      // Update the order count for the user
+      const user = await userModel.findById(order.userId);
+      if (user) {
+        user.orderCount += 1;
+        await user.save();
+      }
+
+      // Update stock for each product in the order
+      const updateStock = order.items.map(async (item) => {
+        const { productId, quantity } = item;
+
+        const variant = await productVariantModel.findOne({ productId });
         if (variant) {
           const newStock = variant.product_stock - quantity;
-          if (newStock < 0) {
-            throw new Error(
-              `Insufficient stock for product: ${product_title}. Available stock: ${variant.product_stock}, requested quantity: ${quantity}.`
-            );
-          }
-
-          // Update the stock in the database
           await productVariantModel.findByIdAndUpdate(variant._id, { product_stock: newStock });
-        } else {
-          throw new Error(`No variant information found for item: ${product_title}`);
         }
       });
 
@@ -127,7 +147,7 @@ exports.verifyStripeOrder = async (req, res) => {
 
       // Clear the user's cart
       await cartModel.findOneAndUpdate(
-        { userId: updatedOrder.userId },
+        { userId: order.userId },
         { products: [], totalPrice: 0 },
         { new: true }
       );
@@ -135,7 +155,8 @@ exports.verifyStripeOrder = async (req, res) => {
       res.status(200).json({ success: true, message: "Payment verified, order processed" });
     } else {
       // Handle failed payment
-      await orderModel.findByIdAndUpdate(orderId, { paymentStatus: "Failed" });
+      order.paymentStatus = "Failed";
+      await order.save();
       res.status(400).json({ success: false, message: "Payment Failed. Please try again." });
     }
   } catch (error) {
@@ -161,7 +182,28 @@ exports.placeOrderCod = async (req, res) => {
       return res.status(400).json({ success: false, message: "Address is required." });
     }
 
-    // Create a new COD order
+    // Verify stock for all items first
+    for (const item of items) {
+      const { productId, quantity, product_title } = item;
+
+      const variant = await productVariantModel.findOne({ productId });
+
+      if (!variant) {
+        return res.status(400).json({
+          success: false,
+          message: `Variant not found for product: ${product_title}`,
+        });
+      }
+
+      if (variant.product_stock < quantity) {
+        return res.status(400).json({
+          success: false,
+          message: `Insufficient stock for product: ${product_title}. Available stock: ${variant.product_stock}, requested quantity: ${quantity}.`,
+        });
+      }
+    }
+
+    // If all items have sufficient stock, proceed to create the order
     const newOrder = new orderModel({
       userId,
       items,
@@ -169,29 +211,22 @@ exports.placeOrderCod = async (req, res) => {
       address,
       deliveryDate,
       shippingMethod,
-      payment: true
+      payment: true,
     });
 
     await newOrder.save();
 
     // Update stock for each product in the order
     const updateStock = items.map(async (item) => {
-      const { productId, quantity, product_title } = item;
+      const { productId, quantity } = item;
 
       const variant = await productVariantModel.findOne({ productId });
 
       if (variant) {
         const newStock = variant.product_stock - quantity;
-        if (newStock < 0) {
-          throw new Error(
-            `Insufficient stock for product: ${product_title}. Available stock: ${variant.product_stock}, requested quantity: ${quantity}.`
-          );
-        }
 
         // Update the stock in the database
         await productVariantModel.findByIdAndUpdate(variant._id, { product_stock: newStock });
-      } else {
-        throw new Error("No variant information found for product");
       }
     });
 
